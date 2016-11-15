@@ -69,11 +69,13 @@ class DBHelper extends SQLiteOpenHelper {
         //TODO:  Make sure to include foreign keys to the Courses and Instructors tables
         createQuery = "CREATE TABLE " + OFFERINGS_TABLE + "("
                 + OFFERINGS_KEY_FIELD_ID + " INTEGER PRIMARY KEY, "
-                + FIELD_SEMESTER_CODE + "INTEGER"
-                + FIELD_COURSE_ID + "INTEGER"
-                + FIELD_INSTRUCTOR_ID + "INTEGER"
-                + "FOREIGN KEY(" + FIELD_COURSE_ID + ") REFERENCES " + COURSES_TABLE + "(" + COURSES_KEY_FIELD_ID + "),"
-                + "FOREIGN KEY(" + FIELD_INSTRUCTOR_ID + ") REFERENCES " + INSTRUCTORS_TABLE + "(" + INSTRUCTORS_KEY_FIELD_ID + "))";
+                + FIELD_SEMESTER_CODE + " INTEGER, "
+                + FIELD_COURSE_ID + " INTEGER, "
+                + FIELD_INSTRUCTOR_ID + " INTEGER, "
+                + "FOREIGN KEY(" + FIELD_COURSE_ID + ") REFERENCES "
+                + COURSES_TABLE + "(" + COURSES_KEY_FIELD_ID + "),"
+                + "FOREIGN KEY(" + FIELD_INSTRUCTOR_ID + ") REFERENCES "
+                + INSTRUCTORS_TABLE + "(" + INSTRUCTORS_KEY_FIELD_ID + "))";
         database.execSQL(createQuery);
 
     }
@@ -274,22 +276,48 @@ class DBHelper extends SQLiteOpenHelper {
     //TODO:  Create the following methods: addOffering, getAllOfferings, deleteOffering
     //TODO:  deleteAllOfferings, updateOffering, and getOffering
     //TODO:  Use the Courses and Instructors methods above as a guide.
-public void addOFfering(Offering offering){
 
-}
+    public void addOffering(int crn, int semesterCode, int courseId, int instructorId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
 
+        values.put(OFFERINGS_KEY_FIELD_ID, crn);
+        values.put(FIELD_SEMESTER_CODE, semesterCode);
+        values.put(FIELD_COURSE_ID, courseId);
+        values.put(FIELD_INSTRUCTOR_ID, instructorId);
 
+        db.insert(OFFERINGS_TABLE, null, values);
 
+        // CLOSE THE DATABASE CONNECTION
+        db.close();
+    }
 
+    public ArrayList<Offering> getAllOffering() {
+        ArrayList<Offering> offeringList = new ArrayList<>();
+        SQLiteDatabase database = this.getReadableDatabase();
+        Cursor cursor = database.query(
+                OFFERINGS_TABLE,
+                new String[]{OFFERINGS_KEY_FIELD_ID, FIELD_SEMESTER_CODE, FIELD_COURSE_ID, FIELD_INSTRUCTOR_ID},
+                null,
+                null,
+                null, null, null, null);
 
+        //COLLECT EACH ROW IN THE TABLE
+        if (cursor.moveToFirst()) {
+            do {
+                Course course = getCourse(cursor.getInt(2));
+                Instructor instructor = getInstructor(cursor.getInt(3));
 
-
-
-
-
-
-
-
+                Offering offering =
+                        new Offering(cursor.getInt(0),
+                                cursor.getInt(1),
+                                course,
+                                instructor);
+                offeringList.add(offering);
+            } while (cursor.moveToNext());
+        }
+        return offeringList;
+    }
 
     //********** IMPORT FROM CSV OPERATIONS:  Courses, Instructors and Offerings
     //TODO:  Write the code for the import OfferingsFromCSV method.
@@ -358,5 +386,35 @@ public void addOFfering(Offering offering){
     }
 
     //TODO:  Write the code for the importOfferingsFromCSV method
+    public boolean importOfferingFromCSV(String csvFileName) {
+        AssetManager am = mContext.getAssets();
+        InputStream inStream = null;
+        try {
+            inStream = am.open(csvFileName);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        BufferedReader buffer = new BufferedReader(new InputStreamReader(inStream));
+        String line;
+        try {
+            while ((line = buffer.readLine()) != null) {
+                String[] fields = line.split(",");
+                if (fields.length != 4) {
+                    Log.d("OCC Course Finder", "Skipping Bad CSV Row: " + Arrays.toString(fields));
+                    continue;
+                }
+                int crn = Integer.parseInt(fields[0].trim());
+                int semesterCode = Integer.parseInt(fields[1].trim());
+                int courseId = Integer.parseInt(fields[2].trim());
+                int instructorId = Integer.parseInt(fields[3].trim());
+                addOffering(crn, semesterCode, courseId, instructorId);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
 
 }
